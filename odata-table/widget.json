@@ -12,7 +12,7 @@
     {
       "kind": "main",
       "tag": "com-example-odata-table",
-      "url": "main.js",
+      "url": "https://dve113.github.io/sac-custom-widgets/odata-table/main.js",
       "integrity": "",
       "ignoreIntegrity": true
     }
