@@ -1,8 +1,8 @@
 {
   "id": "com.example.odatatable",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "name": "OData Table",
-  "description": "Zeigt per Script übergebene OData-Daten in einer Tabelle an (kein SAC-Modell, keine eigene Authentifizierung)",
+  "description": "Zeigt per Script übergebene Daten beliebiger EntitySets in einer Tabelle an",
   "newInstancePrefix": "ODataTable",
   "icon": "",
   "vendor": "Example",
@@ -18,41 +18,102 @@
     }
   ],
   "properties": {
+    "buffer": {
+      "type": "string",
+      "description": "Interner Puffer der Zeilen (wird über die Methoden gefüllt)",
+      "default": ""
+    },
     "data": {
       "type": "string",
-      "description": "Zeilen als JSON-Array (wird über setData gesetzt)",
-      "default": "[]"
+      "description": "Gerenderte Daten (wird von render() aus dem Puffer gesetzt)",
+      "default": ""
     },
     "columns": {
       "type": "string",
-      "description": "Komma-getrennte Liste der anzuzeigenden Spalten in Reihenfolge, leer = alle Skalarfelder",
+      "description": "Komma-getrennte Spaltenüberschriften in Reihenfolge",
+      "default": ""
+    },
+    "numericColumns": {
+      "type": "string",
+      "description": "Komma-getrennte Spaltennummern (1-basiert), die als Zahl formatiert werden",
       "default": ""
     },
     "emptyText": {
       "type": "string",
       "description": "Text, wenn keine Daten vorhanden sind",
       "default": "Keine Datensätze vorhanden."
+    },
+    "decimals": {
+      "type": "integer",
+      "description": "Nachkommastellen für numerische Zellen",
+      "default": 2
     }
   },
   "methods": {
-    "setData": {
-      "description": "Setzt die Tabellendaten. Erwartet ein JSON-Array als String.",
-      "parameters": [
-        { "name": "json", "type": "string", "description": "JSON-Array der Zeilen" }
-      ],
-      "body": "this.data = json;"
+    "clear": {
+      "description": "Leert Puffer und Tabelle",
+      "parameters": [],
+      "body": "this.buffer = ''; this.data = '';"
     },
     "setColumns": {
-      "description": "Legt die anzuzeigenden Spalten fest (komma-getrennt)",
+      "description": "Setzt die Spaltenüberschriften, komma-getrennt",
       "parameters": [
-        { "name": "columns", "type": "string", "description": "z. B. ID,Name,Amount" }
+        { "name": "columns", "type": "string", "description": "z. B. Kunde,Umsatz,Datum" }
       ],
       "body": "this.columns = columns;"
     },
-    "clear": {
-      "description": "Leert die Tabelle",
+    "setNumericColumns": {
+      "description": "Legt fest, welche Spalten als Zahl formatiert werden (1-basierte Nummern, komma-getrennt)",
+      "parameters": [
+        { "name": "columns", "type": "string", "description": "z. B. 2,3" }
+      ],
+      "body": "this.numericColumns = columns;"
+    },
+    "setDecimals": {
+      "description": "Setzt die Nachkommastellen numerischer Spalten",
+      "parameters": [
+        { "name": "decimals", "type": "integer", "description": "z. B. 0, 2 oder 3" }
+      ],
+      "body": "this.decimals = decimals;"
+    },
+    "addText": {
+      "description": "Fügt der aktuellen Zeile eine Textzelle hinzu",
+      "parameters": [
+        { "name": "value", "type": "string", "description": "Zellwert" }
+      ],
+      "body": "this.buffer = (this.buffer || '') + 't' + String(value === null || value === undefined ? '' : value) + '\\u001F';"
+    },
+    "addNumber": {
+      "description": "Fügt der aktuellen Zeile eine numerische Zelle hinzu",
+      "parameters": [
+        { "name": "value", "type": "number", "description": "Zellwert" }
+      ],
+      "body": "this.buffer = (this.buffer || '') + 'n' + String(value === null || value === undefined ? '' : value) + '\\u001F';"
+    },
+    "addBoolean": {
+      "description": "Fügt der aktuellen Zeile eine Ja/Nein-Zelle hinzu",
+      "parameters": [
+        { "name": "value", "type": "boolean", "description": "Zellwert" }
+      ],
+      "body": "this.buffer = (this.buffer || '') + 't' + (value ? 'X' : '') + '\\u001F';"
+    },
+    "endRow": {
+      "description": "Schließt die aktuelle Zeile ab",
       "parameters": [],
-      "body": "this.data = '[]';"
+      "body": "this.buffer = (this.buffer || '') + '\\u001E';"
+    },
+    "addRow": {
+      "description": "Fügt eine komplette Zeile als getrennten String hinzu, z. B. 'Meier|1234|2026-01-31'",
+      "parameters": [
+        { "name": "cells", "type": "string", "description": "Zellwerte, getrennt durch das Trennzeichen" },
+        { "name": "delimiter", "type": "string", "description": "Trennzeichen, z. B. |" }
+      ],
+      "body": "var d = delimiter || '|'; var parts = String(cells === null || cells === undefined ? '' : cells).split(d); var s = ''; for (var i = 0; i < parts.length; i++) { s += 't' + parts[i] + '\\u001F'; } this.buffer = (this.buffer || '') + s + '\\u001E';"
+    },
+    "render": {
+      "description": "Zeigt die gepufferten Zeilen in der Tabelle an",
+      "parameters": [],
+      "body": "this.data = this.buffer || '';"
     }
   },
   "events": {
