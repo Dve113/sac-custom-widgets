@@ -1,8 +1,8 @@
 {
   "id": "com.example.odatatable",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "name": "OData Table",
-  "description": "Zeigt per Script übergebene Daten beliebiger EntitySets in einer Tabelle an",
+  "description": "Zeigt per Script übergebene Daten beliebiger EntitySets in einer Tabelle an, mit Zeilenauswahl",
   "newInstancePrefix": "ODataTable",
   "icon": "",
   "vendor": "Example",
@@ -47,13 +47,23 @@
       "type": "integer",
       "description": "Nachkommastellen für numerische Zellen",
       "default": 2
+    },
+    "selectedIndex": {
+      "type": "integer",
+      "description": "Nummer der ausgewählten Zeile (1-basiert), 0 = keine Auswahl",
+      "default": 0
+    },
+    "selectedRow": {
+      "type": "string",
+      "description": "Rohwerte der ausgewählten Zeile (intern getrennt)",
+      "default": ""
     }
   },
   "methods": {
     "clear": {
-      "description": "Leert Puffer und Tabelle",
+      "description": "Leert Puffer, Tabelle und Auswahl",
       "parameters": [],
-      "body": "this.buffer = ''; this.data = '';"
+      "body": "this.buffer = ''; this.data = ''; this.selectedIndex = 0; this.selectedRow = '';"
     },
     "setColumns": {
       "description": "Setzt die Spaltenüberschriften, komma-getrennt",
@@ -114,11 +124,53 @@
       "description": "Zeigt die gepufferten Zeilen in der Tabelle an",
       "parameters": [],
       "body": "this.data = this.buffer || '';"
+    },
+    "getSelectedRowIndex": {
+      "description": "Nummer der ausgewählten Zeile (1-basiert), 0 wenn nichts ausgewählt ist",
+      "parameters": [],
+      "returnType": "integer",
+      "body": "return this.selectedIndex || 0;"
+    },
+    "getSelectedCell": {
+      "description": "Wert einer Spalte der ausgewählten Zeile als Text (Spaltennummer 1-basiert)",
+      "parameters": [
+        { "name": "column", "type": "integer", "description": "Spaltennummer, 1-basiert" }
+      ],
+      "returnType": "string",
+      "body": "var r = this.selectedRow || ''; if (r === '') { return ''; } var parts = r.split('\\u001F'); var i = (column || 1) - 1; return (i >= 0 && i < parts.length) ? parts[i] : '';"
+    },
+    "getSelectedCellNumber": {
+      "description": "Wert einer Spalte der ausgewählten Zeile als Zahl (Spaltennummer 1-basiert), 0 wenn leer",
+      "parameters": [
+        { "name": "column", "type": "integer", "description": "Spaltennummer, 1-basiert" }
+      ],
+      "returnType": "number",
+      "body": "var r = this.selectedRow || ''; if (r === '') { return 0; } var parts = r.split('\\u001F'); var i = (column || 1) - 1; var v = (i >= 0 && i < parts.length) ? parseFloat(String(parts[i]).replace(',', '.')) : NaN; return isNaN(v) ? 0 : v;"
+    },
+    "getSelectedRow": {
+      "description": "Alle Werte der ausgewählten Zeile als String mit eigenem Trennzeichen",
+      "parameters": [
+        { "name": "delimiter", "type": "string", "description": "Trennzeichen, z. B. |" }
+      ],
+      "returnType": "string",
+      "body": "var r = this.selectedRow || ''; if (r === '') { return ''; } return r.split('\\u001F').join(delimiter || '|');"
+    },
+    "setSelectedRowIndex": {
+      "description": "Wählt eine Zeile per Script aus (1-basiert), 0 hebt die Auswahl auf",
+      "parameters": [
+        { "name": "index", "type": "integer", "description": "Zeilennummer, 1-basiert" }
+      ],
+      "body": "this.selectedIndex = index || 0;"
+    },
+    "clearSelection": {
+      "description": "Hebt die Auswahl auf",
+      "parameters": [],
+      "body": "this.selectedIndex = 0;"
     }
   },
   "events": {
     "onRowClick": {
-      "description": "Wird beim Klick auf eine Zeile ausgelöst"
+      "description": "Wird ausgelöst, wenn der Anwender eine Zeile auswählt oder die Auswahl aufhebt"
     }
   }
 }
