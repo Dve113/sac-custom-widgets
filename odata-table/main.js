@@ -12,7 +12,10 @@
       th { position: sticky; top: 0; background: #f2f2f2; font-weight: 600; z-index: 1; cursor: pointer; user-select: none; }
       th.num, td.num { text-align: right; }
       th .arrow { font-size: 10px; margin-left: 4px; color: #556b82; }
+      tbody tr { cursor: pointer; }
       tbody tr:hover { background: #f7fafd; }
+      tbody tr.selected { background: #d9edff; }
+      tbody tr.selected td { border-bottom-color: #a8cdf0; }
       .msg { padding: 16px; color: #556b82; }
     </style>
     <div class="wrap"><div class="msg" id="msg"></div><table id="tbl" hidden><thead></thead><tbody></tbody></table></div>
@@ -25,9 +28,11 @@
       this._shadow.appendChild(template.content.cloneNode(true));
       this._props = {
         data: "", columns: "", numericColumns: "",
-        emptyText: "Keine Datensätze vorhanden.", decimals: 2
+        emptyText: "Keine Datensätze vorhanden.", decimals: 2,
+        selectedIndex: 0, selectedRow: ""
       };
       this._rows = [];
+      this._selected = -1; // 0-basiert, -1 = keine Auswahl
       this._sort = { col: -1, dir: 1 };
     }
 
@@ -39,6 +44,12 @@
       if ("data" in changedProperties) {
         this._rows = this._parse(this._props.data);
         this._sort = { col: -1, dir: 1 };
+        this._setSelected(-1, false);
+      }
+      // Auswahl per Script gesetzt oder zurückgesetzt
+      if ("selectedIndex" in changedProperties) {
+        const wanted = (this._props.selectedIndex || 0) - 1;
+        if (wanted !== this._selected) this._setSelected(wanted, false);
       }
       this._render();
     }
@@ -86,6 +97,26 @@
       return flags;
     }
 
+    // Auswahl setzen und an SAC zurückmelden
+    _setSelected(index, fireEvent) {
+      const valid = index >= 0 && index < this._rows.length;
+      this._selected = valid ? index : -1;
+
+      const cells = valid ? this._rows[index] : [];
+      const rawRow = cells.map((c) => c.value).join(CELL_SEP);
+
+      this._props.selectedIndex = valid ? index + 1 : 0;
+      this._props.selectedRow = rawRow;
+
+      this.dispatchEvent(new CustomEvent("propertiesChanged", {
+        detail: { properties: { selectedIndex: this._props.selectedIndex, selectedRow: rawRow } }
+      }));
+
+      if (fireEvent) {
+        this.dispatchEvent(new Event("onRowClick"));
+      }
+    }
+
     _render() {
       const msg = this._shadow.getElementById("msg");
       const tbl = this._shadow.getElementById("tbl");
@@ -100,7 +131,7 @@
       const colCount = Math.max(...this._rows.map((r) => r.length));
       const headers = this._headers(colCount);
       const numeric = this._numericFlags(colCount);
-      const rows = this._sortedRows(numeric);
+      const order = this._sortedOrder(numeric); // Indizes der Originalzeilen
 
       const thead = tbl.querySelector("thead");
       const tbody = tbl.querySelector("tbody");
@@ -120,15 +151,17 @@
         }
         th.addEventListener("click", () => {
           this._sort = { col: i, dir: this._sort.col === i ? -this._sort.dir : 1 };
-          this._render();
+          this._render(); // Auswahl bleibt an der Datenzeile hängen, nicht an der Position
         });
         headRow.appendChild(th);
       }
       thead.appendChild(headRow);
 
       const frag = document.createDocumentFragment();
-      rows.forEach((cells) => {
+      order.forEach((rowIndex) => {
+        const cells = this._rows[rowIndex];
         const tr = document.createElement("tr");
+        if (rowIndex === this._selected) tr.className = "selected";
         for (let i = 0; i < colCount; i++) {
           const td = document.createElement("td");
           const cell = cells[i];
@@ -138,7 +171,11 @@
           }
           tr.appendChild(td);
         }
-        tr.addEventListener("click", () => this.dispatchEvent(new Event("onRowClick")));
+        tr.addEventListener("click", () => {
+          const next = rowIndex === this._selected ? -1 : rowIndex; // erneuter Klick hebt auf
+          this._setSelected(next, true);
+          this._render();
+        });
         frag.appendChild(tr);
       });
       tbody.appendChild(frag);
@@ -147,11 +184,12 @@
       tbl.hidden = false;
     }
 
-    _sortedRows(numeric) {
+    _sortedOrder(numeric) {
+      const order = this._rows.map((_, i) => i);
       const { col, dir } = this._sort;
-      if (col < 0) return this._rows;
-      return [...this._rows].sort((a, b) => {
-        const x = a[col], y = b[col];
+      if (col < 0) return order;
+      return order.sort((ia, ib) => {
+        const x = this._rows[ia][col], y = this._rows[ib][col];
         if (!x && !y) return 0;
         if (!x) return 1;
         if (!y) return -1;
