@@ -14,7 +14,6 @@
       th { position: sticky; top: 0; background: #f2f2f2; font-weight: 600; z-index: 1; user-select: none; }
       th .inner { display: flex; align-items: center; gap: 4px; }
       th .label { cursor: pointer; flex: 1 1 auto; }
-      th.num .inner { flex-direction: row-reverse; }
       th.num .label { text-align: right; }
       td.num { text-align: right; }
       th .arrow { font-size: 10px; color: #556b82; }
