@@ -1,8 +1,17 @@
-// 1. Daten lesen
-var rows = ODataService_1.getEntitiesFromEntitySet("SalesOrders", {
-    select: "OrderID,Customer,NetAmount,CreatedAt",
-    orderby: "NetAmount desc",
-    top: 500
+
+// einmalig, z. B. in onInitialization
+ODataTable_1.setPageSize(500);
+ODataTable_1.setTotalCount(
+    ODataService_1.getEntitiesCountFromEntitySet("SalesInformation", {})
+);
+
+
+// Funktion im Script-Objekt, aufgerufen von onInitialization und onPageChange
+var rows = ODataService_1.getEntitiesFromEntitySet("SalesInformation", {
+    select: "Bocordnr,Bocfahrzg,Calyear,Boksalepr",
+    orderby: "Bocordnr asc",
+    top:  ODataTable_1.getPageSize(),
+    skip: ODataTable_1.getRequestedSkip()
 });
 
 // 2. Tabelle vorbereiten
@@ -12,10 +21,10 @@ ODataTable_1.setDecimals(2);
 
 // 3. Zeilen füllen
 for (var i = 0; i < rows.length; i++) {
-    ODataTable_1.addText(rows[i].OrderID);
-    ODataTable_1.addText(rows[i].Customer);
-    ODataTable_1.addNumber(rows[i].NetAmount);
-    ODataTable_1.addText(rows[i].CreatedAt);
+    ODataTable_1.addText(rows.values[i].OrderID);
+    ODataTable_1.addText(rows.values[i].Customer);
+    ODataTable_1.addNumber(rows.values[i].NetAmount);
+    ODataTable_1.addText(rows.values[i].CreatedAt);
     ODataTable_1.endRow();
 }
 
