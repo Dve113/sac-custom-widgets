@@ -1,8 +1,8 @@
 {
   "id": "com.example.odatatable",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "name": "OData Table",
-  "description": "Zeigt per Script übergebene Daten beliebiger EntitySets in einer Tabelle an, mit Zeilenauswahl",
+  "description": "Zeigt per Script übergebene Daten beliebiger EntitySets in einer Tabelle an, mit Zeilenauswahl, Spaltenfilter und Paging",
   "newInstancePrefix": "ODataTable",
   "icon": "",
   "vendor": "MHP - David Morawitzky",
@@ -52,11 +52,31 @@
       "type": "string",
       "description": "Interne Ablage der ausgewählten Zeile",
       "default": ""
+    },
+    "pageSize": {
+      "type": "integer",
+      "description": "Sätze je Seite, 0 = kein Paging und keine Blätterleiste",
+      "default": 0
+    },
+    "pageIndex": {
+      "type": "integer",
+      "description": "Aktuelle Seite (1-basiert)",
+      "default": 1
+    },
+    "totalCount": {
+      "type": "integer",
+      "description": "Gesamtzahl der Sätze im Service, 0 = unbekannt",
+      "default": 0
+    },
+    "requestedSkip": {
+      "type": "integer",
+      "description": "Wert für $skip der angeforderten Seite",
+      "default": 0
     }
   },
   "methods": {
     "clear": {
-      "description": "Leert Tabelle und Auswahl",
+      "description": "Leert Tabelle und Auswahl, Filter und Seiteneinstellung bleiben erhalten",
       "parameters": []
     },
     "setColumns": {
@@ -111,7 +131,12 @@
       "parameters": []
     },
     "getRowCount": {
-      "description": "Anzahl der angezeigten Zeilen",
+      "description": "Anzahl der geladenen Zeilen",
+      "parameters": [],
+      "returnType": "integer"
+    },
+    "getVisibleRowCount": {
+      "description": "Anzahl der nach Filter sichtbaren Zeilen",
       "parameters": [],
       "returnType": "integer"
     },
@@ -158,11 +183,75 @@
     "clearSelection": {
       "description": "Hebt die Auswahl auf",
       "parameters": []
+    },
+    "clearFilters": {
+      "description": "Hebt alle Spaltenfilter auf",
+      "parameters": []
+    },
+    "getFilteredColumn": {
+      "description": "Nummer der zuletzt gefilterten Spalte (1-basiert), 0 wenn keine",
+      "parameters": [],
+      "returnType": "integer"
+    },
+    "getFilterValues": {
+      "description": "Ausgewählte Filterwerte einer Spalte als String mit eigenem Trennzeichen, leer wenn die Spalte nicht gefiltert ist",
+      "parameters": [
+        { "name": "column", "type": "integer", "description": "Spaltennummer, 1-basiert" },
+        { "name": "delimiter", "type": "string", "description": "Trennzeichen, z. B. |" }
+      ],
+      "returnType": "string"
+    },
+    "setFilterValues": {
+      "description": "Setzt den Filter einer Spalte per Script, leerer String hebt ihn auf",
+      "parameters": [
+        { "name": "column", "type": "integer", "description": "Spaltennummer, 1-basiert" },
+        { "name": "values", "type": "string", "description": "Erlaubte Werte, getrennt durch das Trennzeichen" },
+        { "name": "delimiter", "type": "string", "description": "Trennzeichen, z. B. |" }
+      ]
+    },
+    "setPageSize": {
+      "description": "Sätze je Seite, muss dem $top im Script entsprechen. 0 blendet die Blätterleiste aus",
+      "parameters": [
+        { "name": "size", "type": "integer", "description": "z. B. 500" }
+      ]
+    },
+    "setTotalCount": {
+      "description": "Gesamtzahl der Sätze im Service, z. B. aus getEntitiesCountFromEntitySet. 0 = unbekannt",
+      "parameters": [
+        { "name": "count", "type": "integer", "description": "Gesamtzahl" }
+      ]
+    },
+    "setPageIndex": {
+      "description": "Setzt die aktuelle Seite per Script (1-basiert), ohne onPageChange auszulösen",
+      "parameters": [
+        { "name": "index", "type": "integer", "description": "Seitennummer, 1-basiert" }
+      ]
+    },
+    "getPageIndex": {
+      "description": "Aktuelle Seite (1-basiert)",
+      "parameters": [],
+      "returnType": "integer"
+    },
+    "getPageSize": {
+      "description": "Sätze je Seite",
+      "parameters": [],
+      "returnType": "integer"
+    },
+    "getRequestedSkip": {
+      "description": "Wert, der für $skip der angeforderten Seite zu verwenden ist",
+      "parameters": [],
+      "returnType": "integer"
     }
   },
   "events": {
     "onRowClick": {
       "description": "Wird ausgelöst, wenn der Anwender eine Zeile auswählt oder die Auswahl aufhebt"
+    },
+    "onFilterChange": {
+      "description": "Wird ausgelöst, wenn der Anwender einen Spaltenfilter ändert"
+    },
+    "onPageChange": {
+      "description": "Wird ausgelöst, wenn der Anwender blättert. Das Script lädt die Seite mit getRequestedSkip() nach"
     }
   }
 }
