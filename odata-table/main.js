@@ -31,10 +31,14 @@
         emptyText: "Keine Datensätze vorhanden.", decimals: 2,
         selectedIndex: 0, selectedRow: ""
       };
-      this._rows = [];
+      this._buffer = [];   // gesammelte Zeilen, noch nicht angezeigt
+      this._current = [];  // Zellen der Zeile, die gerade aufgebaut wird
+      this._rows = [];     // angezeigte Zeilen
       this._selected = -1; // 0-basiert, -1 = keine Auswahl
       this._sort = { col: -1, dir: 1 };
     }
+
+    /* ---------- SAC-Lebenszyklus ---------- */
 
     onCustomWidgetBeforeUpdate(changedProperties) {
       this._props = { ...this._props, ...changedProperties };
@@ -42,24 +46,165 @@
 
     onCustomWidgetAfterUpdate(changedProperties) {
       if ("data" in changedProperties) {
-        this._rows = this._parse(this._props.data);
+        this._rows = this._decode(this._props.data);
+        this._buffer = this._rows.map((cells) => cells.slice());
         this._sort = { col: -1, dir: 1 };
-        this._setSelected(-1, false);
+        this._applySelection(-1, false);
       }
-      // Auswahl per Script gesetzt oder zurückgesetzt
       if ("selectedIndex" in changedProperties) {
         const wanted = (this._props.selectedIndex || 0) - 1;
-        if (wanted !== this._selected) this._setSelected(wanted, false);
+        if (wanted !== this._selected) this._applySelection(wanted, false);
       }
       this._render();
     }
 
     connectedCallback() {
+      if (!this._rows.length && this._props.data) {
+        this._rows = this._decode(this._props.data);
+        this._buffer = this._rows.map((cells) => cells.slice());
+      }
       this._render();
     }
 
-    // Pufferformat: je Zelle Typkennzeichen (t|n) + Wert + CELL_SEP, je Zeile ROW_SEP
-    _parse(buffer) {
+    /* ---------- Script-API: Daten aufbauen ---------- */
+
+    clear() {
+      this._buffer = [];
+      this._current = [];
+      this._rows = [];
+      this._selected = -1;
+      this._props.data = "";
+      this._props.selectedIndex = 0;
+      this._props.selectedRow = "";
+      this._pushProperties({ data: "", selectedIndex: 0, selectedRow: "" });
+      this._render();
+    }
+
+    setColumns(columns) {
+      this._props.columns = columns == null ? "" : String(columns);
+      this._pushProperties({ columns: this._props.columns });
+      this._render();
+    }
+
+    setNumericColumns(columns) {
+      this._props.numericColumns = columns == null ? "" : String(columns);
+      this._pushProperties({ numericColumns: this._props.numericColumns });
+      this._render();
+    }
+
+    setDecimals(decimals) {
+      const d = parseInt(decimals, 10);
+      this._props.decimals = isNaN(d) ? 2 : d;
+      this._pushProperties({ decimals: this._props.decimals });
+      this._render();
+    }
+
+    addText(value) {
+      this._current.push({ type: "t", value: value == null ? "" : String(value) });
+    }
+
+    addNumber(value) {
+      this._current.push({ type: "n", value: value == null ? "" : String(value) });
+    }
+
+    addBoolean(value) {
+      this._current.push({ type: "t", value: value ? "X" : "" });
+    }
+
+    endRow() {
+      this._buffer.push(this._current);
+      this._current = [];
+    }
+
+    addRow(cells, delimiter) {
+      const d = delimiter ? String(delimiter) : "|";
+      const parts = (cells == null ? "" : String(cells)).split(d);
+      this._buffer.push(parts.map((p) => ({ type: "t", value: p })));
+    }
+
+    render() {
+      if (this._current.length) this.endRow();
+      this._rows = this._buffer.map((cells) => cells.slice());
+      this._selected = -1;
+      this._sort = { col: -1, dir: 1 };
+      this._props.data = this._encode(this._rows);
+      this._props.selectedIndex = 0;
+      this._props.selectedRow = "";
+      this._pushProperties({ data: this._props.data, selectedIndex: 0, selectedRow: "" });
+      this._render();
+    }
+
+    /* ---------- Script-API: Auswahl lesen ---------- */
+
+    getRowCount() {
+      return this._rows.length;
+    }
+
+    getSelectedRowIndex() {
+      return this._selected >= 0 ? this._selected + 1 : 0;
+    }
+
+    getSelectedCell(column) {
+      return this.getCell(this.getSelectedRowIndex(), column);
+    }
+
+    getSelectedCellNumber(column) {
+      const raw = this.getSelectedCell(column);
+      if (raw === "") return 0;
+      const n = parseFloat(String(raw).replace(",", "."));
+      return isNaN(n) ? 0 : n;
+    }
+
+    getSelectedRow(delimiter) {
+      if (this._selected < 0) return "";
+      const d = delimiter ? String(delimiter) : "|";
+      return this._rows[this._selected].map((c) => c.value).join(d);
+    }
+
+    getCell(row, column) {
+      const r = (row || 0) - 1;
+      const c = (column || 0) - 1;
+      if (r < 0 || r >= this._rows.length) return "";
+      const cells = this._rows[r];
+      if (c < 0 || c >= cells.length) return "";
+      return cells[c].value;
+    }
+
+    setSelectedRowIndex(index) {
+      this._applySelection((index || 0) - 1, false);
+      this._render();
+    }
+
+    clearSelection() {
+      this._applySelection(-1, false);
+      this._render();
+    }
+
+    /* ---------- intern ---------- */
+
+    _applySelection(index, fireEvent) {
+      const valid = index >= 0 && index < this._rows.length;
+      this._selected = valid ? index : -1;
+
+      const rawRow = valid ? this._rows[index].map((c) => c.value).join(CELL_SEP) : "";
+      this._props.selectedIndex = valid ? index + 1 : 0;
+      this._props.selectedRow = rawRow;
+
+      this._pushProperties({ selectedIndex: this._props.selectedIndex, selectedRow: rawRow });
+      if (fireEvent) this.dispatchEvent(new Event("onRowClick"));
+    }
+
+    _pushProperties(properties) {
+      this.dispatchEvent(new CustomEvent("propertiesChanged", { detail: { properties } }));
+    }
+
+    _encode(rows) {
+      return rows
+        .map((cells) => cells.map((c) => c.type + c.value + CELL_SEP).join("") + ROW_SEP)
+        .join("");
+    }
+
+    _decode(buffer) {
       if (!buffer) return [];
       return buffer
         .split(ROW_SEP)
@@ -81,7 +226,6 @@
       return generated;
     }
 
-    // numerisch, wenn per addNumber geliefert oder über numericColumns markiert
     _numericFlags(colCount) {
       const marked = new Set(
         (this._props.numericColumns || "")
@@ -95,26 +239,6 @@
         flags[i] = marked.has(i) || this._rows.some((r) => r[i] && r[i].type === "n");
       }
       return flags;
-    }
-
-    // Auswahl setzen und an SAC zurückmelden
-    _setSelected(index, fireEvent) {
-      const valid = index >= 0 && index < this._rows.length;
-      this._selected = valid ? index : -1;
-
-      const cells = valid ? this._rows[index] : [];
-      const rawRow = cells.map((c) => c.value).join(CELL_SEP);
-
-      this._props.selectedIndex = valid ? index + 1 : 0;
-      this._props.selectedRow = rawRow;
-
-      this.dispatchEvent(new CustomEvent("propertiesChanged", {
-        detail: { properties: { selectedIndex: this._props.selectedIndex, selectedRow: rawRow } }
-      }));
-
-      if (fireEvent) {
-        this.dispatchEvent(new Event("onRowClick"));
-      }
     }
 
     _render() {
@@ -131,7 +255,7 @@
       const colCount = Math.max(...this._rows.map((r) => r.length));
       const headers = this._headers(colCount);
       const numeric = this._numericFlags(colCount);
-      const order = this._sortedOrder(numeric); // Indizes der Originalzeilen
+      const order = this._sortedOrder(numeric);
 
       const thead = tbl.querySelector("thead");
       const tbody = tbl.querySelector("tbody");
@@ -151,7 +275,7 @@
         }
         th.addEventListener("click", () => {
           this._sort = { col: i, dir: this._sort.col === i ? -this._sort.dir : 1 };
-          this._render(); // Auswahl bleibt an der Datenzeile hängen, nicht an der Position
+          this._render();
         });
         headRow.appendChild(th);
       }
@@ -172,8 +296,8 @@
           tr.appendChild(td);
         }
         tr.addEventListener("click", () => {
-          const next = rowIndex === this._selected ? -1 : rowIndex; // erneuter Klick hebt auf
-          this._setSelected(next, true);
+          const next = rowIndex === this._selected ? -1 : rowIndex;
+          this._applySelection(next, true);
           this._render();
         });
         frag.appendChild(tr);
