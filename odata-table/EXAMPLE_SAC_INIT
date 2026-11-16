@@ -1,0 +1,23 @@
+// 1. Daten lesen
+var rows = ODataService_1.getEntitiesFromEntitySet("SalesOrders", {
+    select: "OrderID,Customer,NetAmount,CreatedAt",
+    orderby: "NetAmount desc",
+    top: 500
+});
+
+// 2. Tabelle vorbereiten
+ODataTable_1.clear();
+ODataTable_1.setColumns("Beleg,Kunde,Netto,Angelegt am");
+ODataTable_1.setDecimals(2);
+
+// 3. Zeilen füllen
+for (var i = 0; i < rows.length; i++) {
+    ODataTable_1.addText(rows[i].OrderID);
+    ODataTable_1.addText(rows[i].Customer);
+    ODataTable_1.addNumber(rows[i].NetAmount);
+    ODataTable_1.addText(rows[i].CreatedAt);
+    ODataTable_1.endRow();
+}
+
+// 4. Anzeigen
+ODataTable_1.render();
