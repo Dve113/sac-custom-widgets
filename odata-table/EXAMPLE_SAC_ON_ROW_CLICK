@@ -1,0 +1,25 @@
+var zeile = ODataTable_1.getSelectedRowIndex();
+
+if (zeile === 0) {
+    Text_Detail.applyText("Keine Zeile ausgewählt");
+} else {
+    var beleg = ODataTable_1.getSelectedCell(1);
+    var netto = ODataTable_1.getSelectedCellNumber(3);
+
+    Text_Detail.applyText("Beleg " + beleg + " ausgewählt");
+
+    // Positionen zum gewählten Beleg nachladen
+    var pos = ODataService_1.getEntitiesFromEntitySet("SalesOrderItems", {
+        filter: "OrderID eq '" + beleg + "'"
+    });
+
+    ODataTable_Positionen.clear();
+    ODataTable_Positionen.setColumns("Position,Material,Menge");
+    for (var i = 0; i < pos.length; i++) {
+        ODataTable_Positionen.addText(pos[i].ItemNumber);
+        ODataTable_Positionen.addText(pos[i].Material);
+        ODataTable_Positionen.addNumber(pos[i].Quantity);
+        ODataTable_Positionen.endRow();
+    }
+    ODataTable_Positionen.render();
+}
