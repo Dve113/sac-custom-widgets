@@ -1,11 +1,11 @@
 {
   "id": "com.example.odatatable",
-  "version": "3.2.0",
+  "version": "4.0.0",
   "name": "OData Table",
   "description": "Zeigt per Script übergebene Daten beliebiger EntitySets in einer Tabelle an, mit Zeilenauswahl",
   "newInstancePrefix": "ODataTable",
   "icon": "",
-  "vendor": "MHP - David Morawitzky",
+  "vendor": "Example",
   "eula": "",
   "license": "",
   "webcomponents": [
@@ -18,14 +18,9 @@
     }
   ],
   "properties": {
-    "buffer": {
-      "type": "string",
-      "description": "Interner Puffer der Zeilen (wird über die Methoden gefüllt)",
-      "default": ""
-    },
     "data": {
       "type": "string",
-      "description": "Gerenderte Daten (wird von render() aus dem Puffer gesetzt)",
+      "description": "Interne Ablage der Tabellendaten",
       "default": ""
     },
     "columns": {
@@ -55,117 +50,114 @@
     },
     "selectedRow": {
       "type": "string",
-      "description": "Rohwerte der ausgewählten Zeile (intern getrennt)",
+      "description": "Interne Ablage der ausgewählten Zeile",
       "default": ""
     }
   },
   "methods": {
     "clear": {
-      "description": "Leert Puffer, Tabelle und Auswahl",
-      "parameters": [],
-      "body": "this.buffer = ''; this.data = ''; this.selectedIndex = 0; this.selectedRow = '';"
+      "description": "Leert Tabelle und Auswahl",
+      "parameters": []
     },
     "setColumns": {
       "description": "Setzt die Spaltenüberschriften, komma-getrennt",
       "parameters": [
         { "name": "columns", "type": "string", "description": "z. B. Kunde,Umsatz,Datum" }
-      ],
-      "body": "this.columns = columns;"
+      ]
     },
     "setNumericColumns": {
       "description": "Legt fest, welche Spalten als Zahl formatiert werden (1-basierte Nummern, komma-getrennt)",
       "parameters": [
         { "name": "columns", "type": "string", "description": "z. B. 2,3" }
-      ],
-      "body": "this.numericColumns = columns;"
+      ]
     },
     "setDecimals": {
       "description": "Setzt die Nachkommastellen numerischer Spalten",
       "parameters": [
         { "name": "decimals", "type": "integer", "description": "z. B. 0, 2 oder 3" }
-      ],
-      "body": "this.decimals = decimals;"
+      ]
     },
     "addText": {
       "description": "Fügt der aktuellen Zeile eine Textzelle hinzu",
       "parameters": [
         { "name": "value", "type": "string", "description": "Zellwert" }
-      ],
-      "body": "this.buffer = (this.buffer || '') + 't' + String(value === null || value === undefined ? '' : value) + '\\u001F';"
+      ]
     },
     "addNumber": {
       "description": "Fügt der aktuellen Zeile eine numerische Zelle hinzu",
       "parameters": [
         { "name": "value", "type": "number", "description": "Zellwert" }
-      ],
-      "body": "this.buffer = (this.buffer || '') + 'n' + String(value === null || value === undefined ? '' : value) + '\\u001F';"
+      ]
     },
     "addBoolean": {
       "description": "Fügt der aktuellen Zeile eine Ja/Nein-Zelle hinzu",
       "parameters": [
         { "name": "value", "type": "boolean", "description": "Zellwert" }
-      ],
-      "body": "this.buffer = (this.buffer || '') + 't' + (value ? 'X' : '') + '\\u001F';"
+      ]
     },
     "endRow": {
       "description": "Schließt die aktuelle Zeile ab",
-      "parameters": [],
-      "body": "this.buffer = (this.buffer || '') + '\\u001E';"
+      "parameters": []
     },
     "addRow": {
       "description": "Fügt eine komplette Zeile als getrennten String hinzu, z. B. 'Meier|1234|2026-01-31'",
       "parameters": [
         { "name": "cells", "type": "string", "description": "Zellwerte, getrennt durch das Trennzeichen" },
         { "name": "delimiter", "type": "string", "description": "Trennzeichen, z. B. |" }
-      ],
-      "body": "var d = delimiter || '|'; var parts = String(cells === null || cells === undefined ? '' : cells).split(d); var s = ''; for (var i = 0; i < parts.length; i++) { s += 't' + parts[i] + '\\u001F'; } this.buffer = (this.buffer || '') + s + '\\u001E';"
+      ]
     },
     "render": {
-      "description": "Zeigt die gepufferten Zeilen in der Tabelle an",
+      "description": "Zeigt die gesammelten Zeilen in der Tabelle an",
+      "parameters": []
+    },
+    "getRowCount": {
+      "description": "Anzahl der angezeigten Zeilen",
       "parameters": [],
-      "body": "this.data = this.buffer || '';"
+      "returnType": "integer"
     },
     "getSelectedRowIndex": {
       "description": "Nummer der ausgewählten Zeile (1-basiert), 0 wenn nichts ausgewählt ist",
       "parameters": [],
-      "returnType": "integer",
-      "body": "return this.selectedIndex || 0;"
+      "returnType": "integer"
     },
     "getSelectedCell": {
       "description": "Wert einer Spalte der ausgewählten Zeile als Text (Spaltennummer 1-basiert)",
       "parameters": [
         { "name": "column", "type": "integer", "description": "Spaltennummer, 1-basiert" }
       ],
-      "returnType": "string",
-      "body": "var r = this.selectedRow || ''; if (r === '') { return ''; } var parts = r.split('\\u001F'); var i = (column || 1) - 1; return (i >= 0 && i < parts.length) ? parts[i] : '';"
+      "returnType": "string"
     },
     "getSelectedCellNumber": {
       "description": "Wert einer Spalte der ausgewählten Zeile als Zahl (Spaltennummer 1-basiert), 0 wenn leer",
       "parameters": [
         { "name": "column", "type": "integer", "description": "Spaltennummer, 1-basiert" }
       ],
-      "returnType": "number",
-      "body": "var r = this.selectedRow || ''; if (r === '') { return 0; } var parts = r.split('\\u001F'); var i = (column || 1) - 1; var v = (i >= 0 && i < parts.length) ? parseFloat(String(parts[i]).replace(',', '.')) : NaN; return isNaN(v) ? 0 : v;"
+      "returnType": "number"
     },
     "getSelectedRow": {
       "description": "Alle Werte der ausgewählten Zeile als String mit eigenem Trennzeichen",
       "parameters": [
         { "name": "delimiter", "type": "string", "description": "Trennzeichen, z. B. |" }
       ],
-      "returnType": "string",
-      "body": "var r = this.selectedRow || ''; if (r === '') { return ''; } return r.split('\\u001F').join(delimiter || '|');"
+      "returnType": "string"
+    },
+    "getCell": {
+      "description": "Wert einer beliebigen Zelle als Text (Zeile und Spalte 1-basiert)",
+      "parameters": [
+        { "name": "row", "type": "integer", "description": "Zeilennummer, 1-basiert" },
+        { "name": "column", "type": "integer", "description": "Spaltennummer, 1-basiert" }
+      ],
+      "returnType": "string"
     },
     "setSelectedRowIndex": {
       "description": "Wählt eine Zeile per Script aus (1-basiert), 0 hebt die Auswahl auf",
       "parameters": [
         { "name": "index", "type": "integer", "description": "Zeilennummer, 1-basiert" }
-      ],
-      "body": "this.selectedIndex = index || 0;"
+      ]
     },
     "clearSelection": {
       "description": "Hebt die Auswahl auf",
-      "parameters": [],
-      "body": "this.selectedIndex = 0;"
+      "parameters": []
     }
   },
   "events": {
