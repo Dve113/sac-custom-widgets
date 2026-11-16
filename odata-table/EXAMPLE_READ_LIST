@@ -1,1 +1,201 @@
+*&---------------------------------------------------------------------*
+*& Lesen der Verkaufsdaten für das SAC Custom Widget
+*&
+*& Deckt die von der SAC-Script-API genutzten Query-Optionen ab:
+*&   $filter  $orderby  $top  $skip  $count  $select
+*& Keine Parameter, kein Pflichtfilter, kein $expand -> wie von SAC verlangt.
+*&---------------------------------------------------------------------*
 
+*&---------------------------------------------------------------------*
+*& Deklaration im Klassenrumpf (PRIVATE / PROTECTED SECTION)
+*&---------------------------------------------------------------------*
+*  TYPES: BEGIN OF ts_sales,
+*           bocordnr   TYPE zodata_salesinformation_basic-bocordnr,
+*           recordmode TYPE zodata_salesinformation_basic-recordmode,
+*           bocfahrzg  TYPE zodata_salesinformation_basic-bocfahrzg,
+*           bocid      TYPE zodata_salesinformation_basic-bocid,
+*           bocgepa    TYPE zodata_salesinformation_basic-bocgepa,
+*           calweek    TYPE zodata_salesinformation_basic-calweek,
+*           calmonth   TYPE zodata_salesinformation_basic-calmonth,
+*           calquart1  TYPE zodata_salesinformation_basic-calquart1,
+*           calyear    TYPE zodata_salesinformation_basic-calyear,
+*           bokdiscnt  TYPE zodata_salesinformation_basic-bokdiscnt,
+*           boksalepr  TYPE zodata_salesinformation_basic-boksalepr,
+*           currency   TYPE zodata_salesinformation_basic-currency,
+*           bocordcnt  TYPE zodata_salesinformation_basic-bocordcnt,
+*         END OF ts_sales.
+*
+*  TYPES tt_sales TYPE STANDARD TABLE OF ts_sales WITH EMPTY KEY.
+*
+*  METHODS zodata_sales_tab_read_list
+*    IMPORTING
+*      io_request  TYPE REF TO /iwbep/if_v4_requ_basic_list
+*      io_response TYPE REF TO /iwbep/if_v4_resp_basic_list
+*    RAISING
+*      /iwbep/cx_gateway.
+
+
+*&---------------------------------------------------------------------*
+*& Implementierung
+*&---------------------------------------------------------------------*
+METHOD zodata_sales_tab_read_list.
+
+  DATA: lt_busi_data TYPE tt_sales,
+        ls_todo      TYPE /iwbep/if_v4_requ_basic_list=>ty_s_todo_process_list,
+        ls_done      TYPE /iwbep/if_v4_requ_basic_list=>ty_s_todo_process_list,
+        lt_where     TYPE TABLE OF string,
+        lv_where     TYPE string,
+        lv_orderby   TYPE string,
+        lv_top       TYPE i,
+        lv_skip      TYPE i,
+        lv_count     TYPE i.
+
+  " Felder, die im Service sichtbar sind. Die Liste schützt das dynamische
+  " ORDER BY: nur bekannte Spaltennamen gelangen in die SELECT-Anweisung.
+  DATA(lt_allowed) = VALUE string_table(
+    ( `BOCORDNR`  ) ( `RECORDMODE` ) ( `BOCFAHRZG` ) ( `BOCID`     )
+    ( `BOCGEPA`   ) ( `CALWEEK`    ) ( `CALMONTH`  ) ( `CALQUART1` )
+    ( `CALYEAR`   ) ( `BOKDISCNT`  ) ( `BOKSALEPR` ) ( `CURRENCY`  )
+    ( `BOCORDCNT` ) ).
+
+*--------------------------------------------------------------------*
+* 1. Was erwartet das Framework von dieser Implementierung?
+*--------------------------------------------------------------------*
+  io_request->get_todos( IMPORTING es_todo_list = ls_todo ).
+
+*--------------------------------------------------------------------*
+* 2. $filter -> dynamische WHERE-Bedingung
+*    get_filter_osql_where_clause liefert die Bedingung bereits in
+*    Open-SQL-Syntax, inklusive Behandlung der Literale.
+*--------------------------------------------------------------------*
+  IF ls_todo-filter = abap_true.
+    io_request->get_filter_osql_where_clause(
+      IMPORTING ev_osql_where_clause = lv_where ).
+    IF lv_where IS NOT INITIAL.
+      APPEND lv_where TO lt_where.
+    ENDIF.
+    ls_done-filter = abap_true.
+  ENDIF.
+
+  " Optional: technisch gelöschte BW-Sätze ausblenden.
+  " Nur aktivieren, wenn RECORDMODE in der Tabelle gefüllt wird.
+  " APPEND |RECORDMODE NOT IN ( 'R', 'D' )| TO lt_where.
+
+*--------------------------------------------------------------------*
+* 3. $orderby -> dynamisches ORDER BY
+*--------------------------------------------------------------------*
+  IF ls_todo-orderby = abap_true.
+    io_request->get_orderby( IMPORTING et_orderby_property = DATA(lt_orderby) ).
+
+    LOOP AT lt_orderby INTO DATA(ls_orderby).
+      DATA(lv_field) = to_upper( CONV string( ls_orderby-property_path ) ).
+
+      " unbekannte Felder werden ignoriert statt in die SELECT-Anweisung
+      " übernommen
+      IF NOT line_exists( lt_allowed[ table_line = lv_field ] ).
+        CONTINUE.
+      ENDIF.
+
+      IF lv_orderby IS NOT INITIAL.
+        lv_orderby = |{ lv_orderby }, |.
+      ENDIF.
+
+      lv_orderby = |{ lv_orderby }{ lv_field }{
+        COND string( WHEN ls_orderby-descending = abap_true
+                     THEN ` DESCENDING`
+                     ELSE ` ASCENDING` ) }|.
+    ENDLOOP.
+
+    ls_done-orderby = abap_true.
+  ENDIF.
+
+  " OFFSET verlangt eine Sortierung, deshalb immer eine Vorgabe setzen
+  IF lv_orderby IS INITIAL.
+    lv_orderby = `BOCORDNR ASCENDING`.
+  ENDIF.
+
+*--------------------------------------------------------------------*
+* 4. $top und $skip -> Satzbegrenzung
+*    UP TO 0 ROWS liefert alle Sätze, OFFSET 0 überspringt keinen.
+*--------------------------------------------------------------------*
+  IF ls_todo-top = abap_true.
+    io_request->get_top( IMPORTING ev_top = lv_top ).
+    ls_done-top = abap_true.
+  ENDIF.
+
+  IF ls_todo-skip = abap_true.
+    io_request->get_skip( IMPORTING ev_skip = lv_skip ).
+    ls_done-skip = abap_true.
+  ENDIF.
+
+*--------------------------------------------------------------------*
+* 5. $count -> Gesamtzahl der Treffer, vor der Begrenzung durch $top
+*--------------------------------------------------------------------*
+  IF ls_todo-count = abap_true.
+    SELECT COUNT(*)
+      FROM zodata_salesinformation_basic
+      WHERE (lt_where)
+      INTO @lv_count.
+
+    io_response->set_count( iv_count = lv_count ).
+    ls_done-count = abap_true.
+  ENDIF.
+
+*--------------------------------------------------------------------*
+* 6. Daten lesen
+*    $select wird bewusst NICHT als erledigt gemeldet: das Framework
+*    schneidet die nicht angeforderten Felder selbst ab.
+*--------------------------------------------------------------------*
+  SELECT bocordnr,
+         recordmode,
+         bocfahrzg,
+         bocid,
+         bocgepa,
+         calweek,
+         calmonth,
+         calquart1,
+         calyear,
+         bokdiscnt,
+         boksalepr,
+         currency,
+         bocordcnt
+    FROM zodata_salesinformation_basic
+    WHERE (lt_where)
+    ORDER BY (lv_orderby)
+    INTO CORRESPONDING FIELDS OF TABLE @lt_busi_data
+    UP TO @lv_top ROWS
+    OFFSET @lv_skip.
+
+*--------------------------------------------------------------------*
+* 7. Antwort zurückgeben
+*--------------------------------------------------------------------*
+  io_response->set_busi_data( it_busi_data = lt_busi_data ).
+  ls_done-busi_data = abap_true.
+
+  io_response->set_is_done( ls_done ).
+
+ENDMETHOD.
+
+
+*&---------------------------------------------------------------------*
+*& Aufruf aus der Framework-Methode
+*&---------------------------------------------------------------------*
+*METHOD /iwbep/if_v4_dp_basic~read_entity_list.
+*
+*  DATA lv_entity_set TYPE string.
+*
+*  io_request->get_entity_set( IMPORTING ev_entity_set_name = lv_entity_set ).
+*
+*  CASE lv_entity_set.
+*    WHEN 'SalesInformation'.          " Name aus dem Model Provider
+*      zodata_sales_tab_read_list(
+*        io_request  = io_request
+*        io_response = io_response ).
+*
+*    WHEN OTHERS.
+*      RAISE EXCEPTION TYPE /iwbep/cx_gateway
+*        EXPORTING
+*          textid = /iwbep/cx_gateway=>operation_not_supported.
+*  ENDCASE.
+*
+*ENDMETHOD.
